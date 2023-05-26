@@ -46,7 +46,6 @@ jobs:
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws configure set default.region us-east-1
 
-
       - name: Run script
         run: |
           container_id=${{ steps.mysql-container.outputs.container-id }}
