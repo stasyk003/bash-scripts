@@ -1,0 +1,56 @@
+name: Scheduled Job
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '30 22 * * *'  
+
+jobs:
+  run_script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up environment
+        run: |
+          sudo apt-get update
+          sudo apt-get remove -y moby-containerd moby-runc
+          sudo apt-get install -y docker.io awscli
+
+      - name: Pull MySQL Docker image
+        run: sudo docker pull mysql
+
+      - name: Make .env file
+        uses: SpicyPizza/create-envfile@v1.3
+        with:
+          envkey_MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          directory: ./s3-bucket/
+          file_name: .env
+          fail_on_empty: false
+
+      - name: Set up MySQL container
+        id: mysql-container
+        run: |
+          export $(grep -v '^#' ./s3-bucket/.env | xargs)
+          container_id=$(sudo docker run --name mysql-db -e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD -d mysql)
+          echo "::set-output name=container-id::$container_id"
+          sleep 10
+
+      - name: Configure AWS credentials
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region us-east-1
+
+
+      - name: Run script
+        run: |
+          container_id=${{ steps.mysql-container.outputs.container-id }}
+          sudo docker start $container_id
+          chmod +x ./s3-bucket/dbdubm.sh
+          ./s3-bucket/dbdubm.sh "container_id"
+
